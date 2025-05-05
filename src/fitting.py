@@ -2,20 +2,31 @@ import pyddm
 import model_components as model_components
 import numpy as np
 
-def get_parameters(freePs=None): 
+def get_parameters(fit_type = 'opto',freePs=None): 
     """
     build model from parameter units
     """
 
-    unit_classes =  {
-            'drift': getattr(model_components,'DriftAdditiveOpto'),
-            'noise': model_components.get_default_noise(),
-            'bound': getattr(model_components,'BoundOpto'),
-            'nondectime': getattr(model_components,'OverlayNonDecisionOpto'),
-            'mixture':getattr(model_components,'OverlayExponentialMixtureOpto'),
-            'IC': getattr(model_components,'ICPointOpto')
-        }
+    if fit_type == 'opto':
+        unit_classes =  {
+                'drift': getattr(model_components,'DriftAdditiveOpto'),
+                'noise': model_components.get_default_noise(),
+                'bound': getattr(model_components,'BoundOpto'),
+                'nondectime': getattr(model_components,'OverlayNonDecisionOpto'),
+                'mixture':getattr(model_components,'OverlayExponentialMixtureOpto'),
+                'IC': getattr(model_components,'ICPointOpto')
+            }
+    elif fit_type == 'ctrl':
+        unit_classes =  {
+                'drift': getattr(model_components,'AV_drift'),
+                'noise': model_components.get_default_noise(),
+                'bound': model_components.get_default_bound(),
+                'nondectime': getattr(model_components,'NonDecision_AudDom'),
+                'mixture':model_components.get_default_mixture(),
+                'IC': getattr(model_components,'visIC')
+            }   
     
+
     keys = list(unit_classes.keys())
     # overwrite default free Parameters 
     if freePs: 
@@ -40,7 +51,7 @@ def get_parameters(freePs=None):
         'IC':unit_classes['IC'](**class_params['IC']),
         'dt':.001,
         'dx': .001,
-        'T_dur' : 2, 
+        'T_dur' : 1.5, 
         'choice_names':('Right','Left')
     }
 

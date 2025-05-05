@@ -173,3 +173,9 @@ plot_pdfs(bias=(0,3),vis_coef=8,noise=2,bound=1,x0=0,n_simulated=2)
 plot_pdfs(bias=0,vis_coef=8,noise=2,bound=(1,1.2),x0=0,n_simulated=2)
 
 # %%
+plot_pdfs(bias=0,vis_coef=8,noise=(2,3),bound=1,x0=0,n_simulated=2)
+
+# %%
+plot_sym_psychometric(bias=0,vis_coef=8,noise=(2,3),bound=1,x0=0,n_simulated=2)
+
+# %%

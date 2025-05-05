@@ -2,6 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import itertools
 from pyddm.functions import solve_partial_conditions
 
 
@@ -58,6 +59,7 @@ def plot_diagnostics(model=None,sample = None, conditions=None,data_dt =.025,met
         if time_on_x:
             ax.plot(model.t_domain(),s.pdf("_top"),**mkwargs)
             ax.plot(model.t_domain(),-s.pdf("_bottom"),**mkwargs)
+
         else:
             ax.plot(s.pdf("_top")+myloc,model.t_domain(),**mkwargs)
             ax.plot(-s.pdf("_bottom")+myloc,model.t_domain(),**mkwargs)
@@ -76,7 +78,7 @@ def get_rt_quartiles(m,a,v,o,which = 'correct'):
     else:
         side = 0 # when we want to get both
 
-    percentiles = [.4,.5,.6]
+    percentiles = [.45,.5,.55]
     l = [np.interp(np.ptp(sol.cdf('Left'))*p,sol.cdf('Left'),sol.t_domain) for p in percentiles]
     r = [np.interp(np.ptp(sol.cdf('Right'))*p,sol.cdf('Right'),sol.t_domain) for p in percentiles]
     j = [np.interp(np.ptp(sol.cdf('Right')+sol.cdf('Left'))*p,sol.cdf('Right')+sol.cdf('Left'),sol.t_domain) for p in percentiles]
@@ -136,8 +138,8 @@ def plot_psychometric(model,sample,axctrl=None,axopto=None,plot_log=False):
     aud_azimuths  = np.linspace(-1,1,3)
     vis_contrasts = np.linspace(-1,1,40)
 
-    linestyles= ['-','--']
-    markerstyles = ['filled',None]
+    linestyles= ['--','-']
+    markerstyles = [None,'filled']
     if axctrl is None or axopto is None:         
         _,(axctrl,axopto) = plt.subplots(2,1,figsize=(20,10))
     axes = [axctrl,axopto]
@@ -189,8 +191,8 @@ def plot_chronometric(model,sample,which='correct',axctrl=None,axopto=None,metri
     vis_contrasts = np.linspace(-1,1,40)
     colors = ['b','k','r'] # for -1,0,1 aud
 
-    linestyles= ['-','--']
-    markerstyles = ['filled',None]
+    linestyles= ['--','-']
+    markerstyles = [None,'filled']
 
     if axctrl is None or axopto is None:         
         _,(axctrl,axopto) = plt.subplots(2,1,figsize=(20,10))

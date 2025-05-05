@@ -8,7 +8,7 @@
 #$ -l mem=8G
 
 # 11 dataset,15 models/set
-#$ -t 1-11
+#$ -t 1-97
 
 module purge
 module load gcc-libs/4.9.2
@@ -25,8 +25,7 @@ module load binutils
 
 
 pip install --upgrade pip
-pip install git+https://github.com/mwshinn/PyDDM.git@dev
-pip install pathos
+pip install pyddm
 pip install psutil 
 
 python DDMfit_parallelarray.py $SGE_TASK_ID

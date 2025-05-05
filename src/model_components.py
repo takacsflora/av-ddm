@@ -18,52 +18,95 @@ freeP: list of floats (n)
 import numpy as np 
 import pyddm
 
-# each class is a set of parameter components. Each class must contain the following objects: 
-# class DriftAdditiveOpto(pyddm.Drift):
-#     name = "DriftAdditiveSplit"    
-#     required_parameters = [
-#         "aL", "vL","aR","vR","gamma","b", 
-#         "d_aL", "d_vL","d_aR","d_vR" 
-#         ]    
-#     required_conditions = ["audDiff", "visDiff",'is_laserTrial']
 
-#     fittable_minvals = [
-#         .01,.01,.01,.01,0.5,-8,
-#         .01,.01,.01,.01,-8]
-#     fittable_maxvals = [
-#         8,8,8,8,1.5,8, 
-#         8,8,8,8,8]
-#     fixedC = [1,1,1,1,1,0,
-#               0,0,0,0]
-#     freeP = [1,1,1,1,1,0,
-#              0,0,0,0]
+### some control model trials
 
-#     def get_drift(self, conditions, **kwargs):
-#         visContrast = np.abs(conditions["visDiff"])
-#         visSide = np.sign(conditions["visDiff"])
-#         audSide = np.sign(conditions["audDiff"])
-#         isOpto = conditions['is_laserTrial']
+class AV_drift(pyddm.Drift):
+    name = "AV_ddm"
+    required_parameters = [
+        "aR", "vR","aL","vL","gamma", "b", #parameters applied to all (6)
+        'coherent','conflict'
+        ]
+    required_conditions = ["audDiff", "visDiff"]
+    fittable_minvals = [
+        .01,.01,.01,.01,0.1,-4, # drift parameters
+        -5,-5] 
+    fittable_maxvals = [
+        10,10,10,10,1.5,4, # drift parameters
+        5,5]
+    fixedC = [1,1,1,1,1,0,
+              0,0]
+
+    def get_drift(self, conditions, **kwargs):
+        visContrast = np.abs(conditions["visDiff"])
+        visSide = np.sign(conditions["visDiff"])
+        audSide = np.sign(conditions["audDiff"])
         
-#         myDrift = ((self.aR + self.d_aR *isOpto) * (audSide>0) - (self.aL + self.d_aL * isOpto) * (audSide<0) + 
-#                    (self.vR + self.d_vR) * (visSide>0) * (visContrast**self.gamma) - (self.vL+self.d_vL*isOpto) * (visSide<0) * (visContrast**self.gamma) +
-#                    (self.b *isOpto))
+        # variables
+        a_R = (audSide>0)
+        a_L = (audSide<0)
+        v_R = (visSide>0) * (visContrast**self.gamma)
+        v_L = (visSide<0) * (visContrast**self.gamma)
 
-#         return myDrift
-    
+        audComponent = self.aR * a_R - self.aL * a_L
+        visComponent = self.vR  * v_R - self.vL * v_L
+        biasComponent = self.b 
+
+        conherent  = self.coherent * (a_R * v_R) - self.coherent * (a_L * v_L)
+        confict  = self.conflict * (a_R * v_L) - self.conflict * (a_L * v_R)
+
+        myDrift = audComponent + visComponent + biasComponent + conherent + confict
+
+        return myDrift
+
+class visIC(pyddm.ICPoint):
+    name = "starting point allowing a differential bound to a and v."
+    required_parameters = ["x0", "vis_x0"]
+    required_conditions = ["visDiff"]
+    fittable_minvals = [-.9,-.9]
+    fittable_maxvals = [.9,.9]
+    fixedC = [0,0]
+    freeP = [1,0]
+
+    def get_starting_point(self, conditions):
+        visSide = np.sign(conditions["visDiff"])
+        start = self.x0+(self.vis_x0*visSide)
+        # we fix bound and if .95 exceeded we fix the start        
+        if start>0.95:
+            start=.95
+        elif start<-.95:
+            start =-.95
+        return start
+
+class NonDecision_AudDom(pyddm.OverlayNonDecision):
+    name = "Separate non-decision time for aud and vis components"
+    required_parameters = ["nondectime","aud_nondec"]
+    required_conditions = ["audDiff"] 
+    fittable_minvals = [.01,-.4]
+    fittable_maxvals = [.4,.4]
+    fixedC = [.3,0]
+    freeP = [1,0]    
+
+    def get_nondecision_time(self, conditions):
+        audTrial= np.abs(np.sign((conditions["audDiff"])))
+        return self.nondectime  + self.aud_nondec * audTrial
+
+############# opto models ########
+
 class DriftAdditiveOpto(pyddm.Drift):
     name = "DriftAdditiveSplit"    
     required_parameters = [
-        "a", "v","aS","vS","gamma", "b", #parameters applied to all (6)
+        "aR", "vR","aL","vL","gamma", "b", #parameters applied to all (6)
         "d_aR","d_aL", "d_vR","d_vL","d_b"  #opto dependent parameters (5)
         ]    
     required_conditions = ["audDiff", "visDiff",'is_laserTrial']
 
     fittable_minvals = [
-        .01,.01,-4,-4,0.5,-4,
-        -3,-3,-3,-3,-6]
+        .01,.01,.01,.01,0.1,-4,
+        -10,-10,-10,-10,-10]
     fittable_maxvals = [
-        6,6,4,4,1.5,4, 
-        6,6,6,6,6]
+        15,15,15,15,1.5,4, 
+        1,1,1,1,10]
     fixedC = [1,1,1,1,1,0,
               0,0,0,0,0]
     
@@ -81,9 +124,10 @@ class DriftAdditiveOpto(pyddm.Drift):
         a_L = (audSide<0)
         v_R = (visSide>0) * (visContrast**self.gamma)
         v_L = (visSide<0) * (visContrast**self.gamma)
-        audComponent = (self.a + self.d_aL * isOpto) * a_R - (self.a + self.aS + self.d_aR * isOpto) * a_L
-        visComponent = (self.v + self.d_vL * isOpto) * v_R - (self.v + self.vS + self.d_vR * isOpto) * v_L
-        biasComponent = self.b + self.d_b* isOpto
+
+        audComponent = (self.aR + self.d_aR * isOpto) * a_R - (self.aL + self.d_aL * isOpto) * a_L
+        visComponent = (self.vR + self.d_vR * isOpto) * v_R - (self.vL + self.d_vL * isOpto) * v_L
+        biasComponent = self.b + self.d_b * isOpto
 
         myDrift = audComponent + visComponent + biasComponent
 
@@ -102,7 +146,6 @@ class BoundOpto(pyddm.Bound):
 
         return  self.B + (self.d_B * isOpto)
 
-
 class OverlayNonDecisionOpto(pyddm.OverlayNonDecision):
     name = "Separate non-decision time for aud and vis components"
     required_parameters = ["nondectime", "d_nondectimeOpto"]
@@ -114,28 +157,28 @@ class OverlayNonDecisionOpto(pyddm.OverlayNonDecision):
 
     def get_nondecision_time(self, conditions):
         isOpto = conditions['is_laserTrial']
-        return self.nondectime + self.d_nondectimeOpto * isOpto
+        return self.nondectime  + self.d_nondectimeOpto * isOpto
 
 class ICPointOpto(pyddm.ICPoint):
     name = "A starting point with a left or right bias."
-    required_parameters = ["x0", "d_x0"]
-    required_conditions = ["is_laserTrial"]
-    fittable_minvals = [-.9,-.9]
-    fittable_maxvals = [.9,.9]
-    fixedC = [0,0]
-    freeP = [1,0]
+    required_parameters = ["x0",'vis_x0', "d_x0"]
+    required_conditions = ["visDiff","is_laserTrial"]
+    fittable_minvals = [-.9,-.9,-.9]
+    fittable_maxvals = [.9,.9,.9]
+    fixedC = [0,0,0]
+    freeP = [1,1,0]
 
     def get_starting_point(self, conditions):
         isOpto = conditions['is_laserTrial']
+        visSide = np.sign(conditions["visDiff"])
 
-        start = self.x0+(self.d_x0*isOpto)
+        start = self.x0+(self.vis_x0*visSide)+(self.d_x0*isOpto)
         # we fix bound and if .95 exceeded we fix the start        
         if start>0.95:
             start=.95
         elif start<-.95:
             start =-.95
         return start
-
 
 class OverlayExponentialMixtureOpto(pyddm.Overlay):
     """An exponential mixture distribution where the mixture coef depends on opto
@@ -144,8 +187,8 @@ class OverlayExponentialMixtureOpto(pyddm.Overlay):
     name = "Exponential distribution mixture model (lapse rate)"
     required_parameters = ["pmixturecoef", "rate","d_pmixturecoef"]
     required_conditions = ["is_laserTrial"]
-    fittable_minvals = [0.01,.3,-.5]
-    fittable_maxvals = [.5,2,.5]
+    fittable_minvals = [0.01,.01,-.5]
+    fittable_maxvals = [1,2,.5]
     fixedC = [.2,1,0]
     freeP = [1,1,0]
 
@@ -183,7 +226,7 @@ class OverlayExponentialMixtureOpto(pyddm.Overlay):
 def get_default_noise():
     c = pyddm.NoiseConstant
     c.fittable_minvals = [.2]
-    c.fittable_maxvals = [3]
+    c.fittable_maxvals = [5]
     c.fixedC = [1]
     c.freeP = [1]
     return c
@@ -195,7 +238,6 @@ def get_default_drift():
     c.fixedC = [.5]
     c.freeP = [1]
     return c
-
 
 def get_default_bound():
     c = pyddm.BoundConstant
@@ -213,7 +255,6 @@ def get_default_IC():
     c.freeP = [0]
     return c
 
-
 def get_default_nondecision():
     c = pyddm.OverlayNonDecision
     c.fittable_minvals = [.01]
@@ -226,200 +267,137 @@ def get_default_mixture():
     c = pyddm.OverlayExponentialMixture
     c.fittable_minvals = [.01,.1]
     c.fittable_maxvals = [.3,2]
-    c.fixedC = [.1,1]
+    c.fixedC = [.01,1]
     c.freeP = [1,1]
     return c
 
+def get_freeP_ctrl(which='ctrl'):
 
-def get_freeP_sets(which = 'ctrl'):
+    if which == 'ctrl':        
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      0,0], 
+            'noise':[1],
+            'bound': [0],
+            'nondectime':[1,0],
+            'mixture':[0,0],
+                'IC': [1,0]
+        }
+
+    elif which == 'full':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      1,1], 
+            'noise':[1],
+            'bound': [0],
+            'nondectime':[1,1],
+            'mixture':[1,1],
+                'IC': [1,1]
+        }
+
+    elif which == 'g_coherent':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      1,0], 
+            'noise':[1],
+            'bound': [0],
+            'nondectime':[1,0],
+            'mixture':[1,1],
+                'IC': [1,0]
+        }
+
+    elif which == 'g_conflict':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      0,1], 
+            'noise':[1],
+            'bound': [0],
+            'nondectime':[1,0],
+            'mixture':[1,1],
+                'IC': [1,0]
+        }
+    
+    elif which == 'g_vis_x0':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      0,0], 
+            'noise':[1],
+            'bound': [0],
+            'nondectime':[1,0],
+            'mixture':[1,1],
+                'IC': [1,1]
+        }
+
+    elif which == 'g_aud_nondec':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      0,0], 
+            'noise':[1],
+            'bound': [0],
+            'nondectime':[1,1],
+            'mixture':[1,1],
+                'IC': [1,0]
+        }
+
+    elif which == 'l_coherent':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      0,1], 
+            'noise':[1],
+            'bound': [0],
+            'nondectime':[1,1],
+            'mixture':[1,1],
+                'IC': [1,1]
+        }
+
+    elif which == 'l_conflict':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      1,0], 
+            'noise':[1],
+            'bound': [0],
+            'nondectime':[1,1],
+            'mixture':[1,1],
+                'IC': [1,1]
+        }
+
+    elif which == 'l_vis_x0':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      1,1], 
+            'noise':[1],
+            'bound': [0],
+            'nondectime':[1,1],
+            'mixture':[1,1],
+                'IC': [1,0]
+        }
+
+    elif which == 'l_aud_nondec':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      1,1], 
+            'noise':[1],
+            'bound': [0],
+            'nondectime':[1,0],
+            'mixture':[1,1],
+                'IC': [1,1]
+        }
+    
+    return freePs
+
+# so, maybe we need to have anothe get_freeP for th econtrol model
+def get_freeP_opto(which = 'ctrl'):
     """
     hardcoded dictionaries that allow sets of parameters to fix vs fit 
 
-    
-    start with 'all'
+    optogenetics paramters we are going to test:
+    d_aR, d_aL, d_vR, d_vL, d_b, d_nondectimeOpto, d_x0, d_pmixturecoef
 
-    Q1 can we get rid of any parameter? 
-    'all'
-    'l_[param_name]' 
+    # plus some other models....
 
-    # lets do it sequentially 
-    (some of their combinations)
-    'l_sensoryLR'
-    [
-        "a", "v","aS","vS","gamma","b", #parameters applied to all (6)
-        "d_aR","d_aL", "d_vR","d_vL","d_b"  #opto dependent parameters (5)
-        ]    
-
-    Q1: do we need all the drift parameters?
-    'ctrl'
-    'd_b'
-    'd_x0'
-    'd_x0_d_b'
-    'd_mix_d_b'
-    'd_S_d_b'
-    'd_nondec_d_b'
 
     """
-    if 'all' in which: 
-        freePs = {
-            'drift': [1,1,1,1,1,1,
-                      1,1,1,1,1], 
-            'noise':[1],
-            'bound': [0,0],
-            'nondectime':[1,1],
-            'mixture':[1,1,1],
-                'IC': [1,1]
-        }
-
-
-    elif 'l_aS' in which: 
-        freePs = {
-            'drift': [1,1,0,1,1,1,
-                      1,1,1,1,1], 
-            'noise':[1],
-            'bound': [0,0], # never changes
-            'nondectime':[1,1],
-            'mixture':[1,1,1],
-                'IC': [1,1]
-        }
-
-    elif 'l_vS' in which: 
-        freePs = {
-            'drift': [1,1,1,0,1,1,
-                      1,1,1,1,1], 
-            'noise':[1],
-            'bound': [0,0], # never changes
-            'nondectime':[1,1],
-            'mixture':[1,1,1],
-                'IC': [1,1]
-        }
-
-    elif 'l_gamma' in which: 
-        freePs = {
-            'drift': [1,1,1,1,0,1,
-                      1,1,1,1,1], 
-            'noise':[1],
-            'bound': [0,0], # never changes
-            'nondectime':[1,1],
-            'mixture':[1,1,1],
-                'IC': [1,1]
-        }
-
-    elif 'l_b' in which: 
-        freePs = {
-            'drift': [1,1,1,1,1,0,
-                      1,1,1,1,1], 
-            'noise':[1],
-            'bound': [0,0], # never changes
-            'nondectime':[1,1],
-            'mixture':[1,1,1],
-                'IC': [1,1]
-        }
-
-
-    elif 'l_d_aR' in which: 
-        freePs = {
-            'drift': [1,1,1,1,1,1,
-                      0,1,1,1,1], 
-            'noise':[1],
-            'bound': [0,0], # never changes
-            'nondectime':[1,1],
-            'mixture':[1,1,1],
-                'IC': [1,1]
-        }
-
-    elif 'l_d_aL' in which: 
-        freePs = {
-            'drift': [1,1,1,1,1,1,
-                      1,0,1,1,1], 
-            'noise':[1],
-            'bound': [0,0], # never changes
-            'nondectime':[1,1],
-            'mixture':[1,1,1],
-                'IC': [1,1]
-        }
-
-    elif 'l_d_vR' in which: 
-        freePs = {
-            'drift': [1,1,1,1,1,1,
-                      1,1,0,1,1], 
-            'noise':[1],
-            'bound': [0,0], # never changes
-            'nondectime':[1,1],
-            'mixture':[1,1,1],
-                'IC': [1,1]
-        }
-
-    elif 'l_d_vL' in which: 
-        freePs = {
-            'drift': [1,1,1,1,1,1,
-                      1,1,1,0,1], 
-            'noise':[1],
-            'bound': [0,0], # never changes
-            'nondectime':[1,1],
-            'mixture':[1,1,1],
-                'IC': [1,1]
-        }
-
-    elif 'l_d_b' in which: 
-        freePs = {
-            'drift': [1,1,1,1,1,1,
-                      1,1,1,1,0], 
-            'noise':[1],
-            'bound': [0,0], # never changes
-            'nondectime':[1,1],
-            'mixture':[1,1,1],
-                'IC': [1,1]
-        }
-
-
-    elif 'l_d_nondectime' in which: 
-        freePs = {
-            'drift': [1,1,1,1,1,1,
-                      1,1,1,1,1], 
-            'noise':[1],
-            'bound': [0,0], # never changes
-            'nondectime':[1,0],
-            'mixture':[1,1,1],
-                'IC': [1,1]
-        }
-
-    elif 'l_d_mixturecoef' in which: 
-        freePs = {
-            'drift': [1,1,1,1,1,1,
-                      1,1,1,1,1], 
-            'noise':[1],
-            'bound': [0,0], # never changes
-            'nondectime':[1,1],
-            'mixture':[1,1,0],
-                'IC': [1,1]
-        }
-
-
-    elif 'l_d_x0' in which: 
-        freePs = {
-            'drift': [1,1,1,1,1,1,
-                      1,1,1,1,1], 
-            'noise':[1],
-            'bound': [0,0], # never changes
-            'nondectime':[1,1],
-            'mixture':[1,1,1],
-                'IC': [1,0]
-        }
-
-
-    elif 'simplest_control' in which: 
-        freePs = {
-            'drift': [1,1,0,0,0,0,
-                      0,0,0,0,0], 
-            'noise':[1],
-            'bound': [0,0],
-            'nondectime':[1,0],
-            'mixture':[1,1,0],
-                'IC': [1,0]
-        }
-
-    elif 'ctrl' in which: 
+    if which == 'ctrl': 
         freePs = {
             'drift': [1,1,1,1,1,1,
                       0,0,0,0,0], 
@@ -427,10 +405,65 @@ def get_freeP_sets(which = 'ctrl'):
             'bound': [0,0],
             'nondectime':[1,0],
             'mixture':[1,1,0],
-                'IC': [1,0]
+                'IC': [1,1,0]
         }
 
-    elif 'g_d_b' in which: 
+    elif which == 'full': 
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      1,1,1,1,1], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,1],
+            'mixture':[1,1,1],
+                'IC': [1,1,1]
+        }
+
+    elif which == 'g_d_aR':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      1,0,0,0,0], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,0],
+            'mixture':[1,1,0],
+                'IC': [1,1,0]
+        }
+
+    elif which == 'g_d_aL':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      0,1,0,0,0], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,0],
+            'mixture':[1,1,0],
+                'IC': [1,1,0]
+        }
+
+    elif which == 'g_d_vR':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      0,0,1,0,0], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,0],
+            'mixture':[1,1,0],
+                'IC': [1,1,0]
+        }
+    
+    elif which == 'g_d_vL':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      0,0,0,1,0], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,0],
+            'mixture':[1,1,0],
+                'IC': [1,1,0]
+        }
+    
+    elif which == 'g_d_b':
         freePs = {
             'drift': [1,1,1,1,1,1,
                       0,0,0,0,1], 
@@ -438,10 +471,21 @@ def get_freeP_sets(which = 'ctrl'):
             'bound': [0,0],
             'nondectime':[1,0],
             'mixture':[1,1,0],
-                'IC': [1,0]
+                'IC': [1,1,0]
+        }
+    
+    elif which == 'g_d_nondec':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      0,0,0,0,0], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,1],
+            'mixture':[1,1,0],
+                'IC': [1,1,0]
         }
 
-    elif 'g_d_x0' in which: 
+    elif which == 'g_d_x0':
         freePs = {
             'drift': [1,1,1,1,1,1,
                       0,0,0,0,0], 
@@ -449,22 +493,21 @@ def get_freeP_sets(which = 'ctrl'):
             'bound': [0,0],
             'nondectime':[1,0],
             'mixture':[1,1,0],
-                'IC': [1,1]
+                'IC': [1,1,1]
         }
-
-    elif 'g_both' in which: 
+    
+    elif which == 'g_d_mixture':
         freePs = {
             'drift': [1,1,1,1,1,1,
-                      0,0,0,0,1], 
+                      0,0,0,0,0], 
             'noise':[1],
             'bound': [0,0],
             'nondectime':[1,0],
-            'mixture':[1,1,0],
-                'IC': [1,1]
+            'mixture':[1,1,1],
+                'IC': [1,1,0]
         }
 
-
-    elif 'g_boundx0' in which: 
+    elif which == 'g_d_bound': # this is increase of the bound
         freePs = {
             'drift': [1,1,1,1,1,1,
                       0,0,0,0,0], 
@@ -472,23 +515,201 @@ def get_freeP_sets(which = 'ctrl'):
             'bound': [0,1],
             'nondectime':[1,0],
             'mixture':[1,1,0],
-                'IC': [1,1]
+                'IC': [1,1,0]
         }
 
-
-    elif 'fixed' in which: 
+    elif which == 'g_d_boundx0': # this asymetric bound 
         freePs = {
-            'drift': [0,0,0,0,0,0,
+            'drift': [1,1,1,1,1,1,
                       0,0,0,0,0], 
-            'noise':[0],
-            'bound': [0,0],
-            'nondectime':[0,0],
-            'mixture':[0,0,0],
-                'IC': [0,0]
+            'noise':[1],
+            'bound': [0,1],
+            'nondectime':[1,0],
+            'mixture':[1,1,0],
+                'IC': [1,1,1]
         }
 
+    elif which == 'g_d_sensory': # this allows all sensory to be opto dependent
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      1,1,1,1,0], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,0],
+            'mixture':[1,1,0],
+                'IC': [1,1,0]
+        }
 
+    elif which == 'g_d_bx0':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      0,0,0,0,1], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,0],
+            'mixture':[1,1,0],
+                'IC': [1,1,1]
+        }
+
+    elif which == 'l_d_aR':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      0,1,1,1,1], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,1],
+            'mixture':[1,1,1],
+                'IC': [1,1,1]
+        }
+    
+    elif which == 'l_d_aL':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      1,0,1,1,1], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,1],
+            'mixture':[1,1,1],
+                'IC': [1,1,1]
+        }
+
+    elif which == 'l_d_vR':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      1,1,0,1,1], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,1],
+            'mixture':[1,1,1],
+                'IC': [1,1,1]
+        }
+
+    elif which == 'l_d_vL':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      1,1,1,0,1], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,1],
+            'mixture':[1,1,1],
+                'IC': [1,1,1]
+        }
+
+    elif which == 'l_d_b':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      1,1,1,1,0], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,1],
+            'mixture':[1,1,1],
+                'IC': [1,1,1]
+        }
+
+    elif which == 'l_d_nondec':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      1,1,1,1,1], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,0],
+            'mixture':[1,1,1],
+                'IC': [1,1,1]
+        }
+
+    elif which == 'l_d_x0':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      1,1,1,1,1], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,1],
+            'mixture':[1,1,1],
+                'IC': [1,1,0]
+        }
+
+    elif which == 'l_d_mixture':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      1,1,1,1,1], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,1],
+            'mixture':[1,1,0],
+                'IC': [1,1,1]
+        }
+
+    elif which == 'l_d_sensory':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      0,0,0,0,1], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,1],
+            'mixture':[1,1,1],
+                'IC': [1,1,1]
+        }
+
+    elif which == 'l_d_bx0':
+        freePs = {
+            'drift': [1,1,1,1,1,1,
+                      1,1,1,1,0], 
+            'noise':[1],
+            'bound': [0,0],
+            'nondectime':[1,1],
+            'mixture':[1,1,1],
+                'IC': [1,1,0]
+        }
 
     return freePs
 
+def get_freeP_set(fit_type='ctrl'):
+    """
+    get the freeP dictionary for the model to fit. 
+    """
+    if fit_type == 'ctrl':
 
+        freeP_sets = [
+            'ctrl',
+            'full',
+            'g_coherent', 
+            'g_conflict',
+            'g_vis_x0',
+            'g_aud_nondec', 
+            'l_coherent', 
+            'l_conflict', 
+            'l_vis_x0', 
+            'l_aud_nondec', 
+        ]
+    
+    elif fit_type == 'opto':
+        freeP_sets = [
+            'ctrl',
+            'full',
+            'g_d_aR', 
+            'g_d_aL', 
+            'g_d_vR', 
+            'g_d_vL', 
+            'g_d_b', 
+            'g_d_nondec', 
+            'g_d_x0', 
+            'g_d_mixture',
+            'g_d_bound',
+            'g_d_boundx0',
+            'g_d_sensory',
+            'g_d_bx0',
+            'l_d_aR', 
+            'l_d_aL', 
+            'l_d_vR', 
+            'l_d_vL', 
+            'l_d_b', 
+            'l_d_nondec', 
+            'l_d_x0', 
+            'l_d_mixture',
+            'l_d_sensory',
+            'l_d_bx0'
+        ] 
+
+    
+
+    return freeP_sets

@@ -14,6 +14,7 @@ setup(
         'ipykernel',
         'pyddm',
         'scikit-learn',
+        'seaborn'
 
     ],
     classifiers=[                          # Optional metadata for PyPI
