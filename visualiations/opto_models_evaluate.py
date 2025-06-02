@@ -2,11 +2,14 @@
 import numpy as np 
 import pandas as pd
 from pathlib import Path
+
+
 from utils.add_src_to_sys import *
 from src.evaluate import load_evaluation,get_gain_loss_models
 
 import matplotlib.pyplot as plt
 import seaborn as sns
+from scipy.stats import ttest_rel
 
 path = Path(r'C:\Users\Flora\Documents\Github\av-ddm\data\rt_to_stim')
 df = load_evaluation(path,recompute = False)
@@ -16,13 +19,57 @@ df['hemisphere'] = df['hemisphere'].replace({'right': 'uni', 'left': 'uni'})
 df_logLik = get_gain_loss_models(df)
 
 
-
 # %%
 region = 'SC'
 hemisphere = 'uni'
+
+
+#%%
+df_logLik_full = df_logLik[
+                        (df_logLik['inactivation_location'] == region) & 
+                        (df_logLik['hemisphere'] == hemisphere) & 
+                        (df_logLik['param']=='ctrl')
+].copy()
+
+fig, ax = plt.subplots(1, 1, figsize=(1, 2),dpi=150)
+
+plt.rcParams.update({'font.size': 8})
+                       
+# Loop over stems and plot in grey
+
+statistic = 'LogLik_test'
+
+for stem in df_logLik_full['stem'].unique():
+    sns.lineplot(
+        data=df_logLik_full[df_logLik_full['stem'] == stem],
+        x='type', y='LogLik_test', color='grey', alpha=0.5, legend=False,ax=ax
+    )
+
+# Plot the average in black
+df_avg = df_logLik_full.groupby('type', as_index=False)[statistic].mean()
+sns.lineplot(data=df_avg, x='type', y=statistic, color='black', linewidth=4, legend=False,ax=ax)
+
+
+# Perform a paired t-test between 'ctrl' and 'full'
+ctrl_values = df_logLik_full[df_logLik_full['type'] == 'gain'][statistic]
+full_values = df_logLik_full[df_logLik_full['type'] == 'loss'][statistic]
+
+t_stat, p_value = ttest_rel(ctrl_values, full_values)
+
+print(f"Paired t-test results: t-statistic = {t_stat:.3f}, p-value = {p_value:.3e}")
+
+
+# Turn off all spines except for the y-axis
+sns.despine(ax=ax, left=False, right=True, top=True, bottom=True)
+ax.set_ylabel('-LogLikelihood')
+ax.set_xlabel('')
+ax.set_yticks([-.8, -.4, 0])
+ax.set_xlim([-.2,1.1])
+
+#%%
 #sel_params = df_logLik.param.unique()
 
-sel_params = ['d_nondec','d_aR','d_aL','d_vL','d_vR','d_x0','d_b']
+sel_params = ['d_nondec','d_aR','d_aL','d_vL','d_vR','d_BL','d_x0','d_b']
 
 df_logLik_region = df_logLik[
                         (df_logLik['inactivation_location'] == region) & 
@@ -67,7 +114,7 @@ df_full = df[
     ].copy()
 
 
-params = ['d_nondectimeOpto']
+params = ['d_aR','d_aL','d_vR','d_vL','d_b','d_BL','d_nondec','d_x0']
 
 n_params = len(params)
 fig,ax = plt.subplots(1,n_params,figsize=(n_params*2,3),sharex=True,sharey=True)

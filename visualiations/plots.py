@@ -67,7 +67,7 @@ def plot_diagnostics(model=None,sample = None, conditions=None,data_dt =.025,met
         toplabel,bottomlabel = model.choice_names
 
 def get_rt_quartiles(m,a,v,o,which = 'correct'):
-    sol = m.solve(conditions={"audDiff": a, "visDiff": v,'is_laserTrial':o})
+    sol = m.solve(conditions={'a_R':np.abs(a)*(a>0),'a_L':np.abs(a)*(a<0),'v_R':np.abs(v)*(v>0),'v_L':np.abs(v)*(v<0),'isOpto':o})
 
     if 'correct' in which:
         side = np.sign(np.sign(a) + np.sign(v)) 
@@ -145,7 +145,8 @@ def plot_psychometric(model,sample,axctrl=None,axopto=None,plot_log=False):
     axes = [axctrl,axopto]
 
     for isLaser,(line,marker,ax) in enumerate(zip(linestyles,markerstyles,axes)):
-        psychometric,a,v = zip(*[[model.solve(conditions={"audDiff": a, "visDiff": v,'is_laserTrial':isLaser}).prob('Right'),a,v] for a,v in itertools.product(aud_azimuths,vis_contrasts)])
+        psychometric,a,v = zip(*[[model.solve(conditions={'a_R':np.abs(a)*(a>0),'a_L':np.abs(a)*(a<0),'v_R':np.abs(v)*(v>0),'v_L':np.abs(v)*(v<0),'isOpto':isLaser}).prob('Right'),a,v] 
+                                 for a,v in itertools.product(aud_azimuths,vis_contrasts)])
         psychometric = np.reshape(np.array(psychometric),(aud_azimuths.size,vis_contrasts.size)) # reshape to aud x vis matrix 
         a = np.reshape(np.array(a),(aud_azimuths.size,vis_contrasts.size)) # reshape to aud x vis matrix 
         v = np.reshape(np.array(v),(aud_azimuths.size,vis_contrasts.size)) # reshape to aud x vis matrix 

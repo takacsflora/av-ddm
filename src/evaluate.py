@@ -7,6 +7,9 @@ import re
 import pyddm 
 
 from my_io import read_pickle
+from read_model import get_model
+
+
 from utils.av_dat_manager import get_inactivation_locations
 inactivation_locations = get_inactivation_locations()
 
@@ -73,6 +76,7 @@ def get_logliks(sample):
     """
     # Load the test sample
     test_sample = read_pickle(sample['test_path'])
+    train_sample = read_pickle(sample['train_path'])
     
     # Load the model
     model_paths = sample['model_paths']
@@ -82,8 +86,9 @@ def get_logliks(sample):
 
     params = []
     for path in model_paths: 
-        model = read_pickle(path)
-        LogLiks_train.append(model.fitresult.value())
+        model = get_model(path)
+        LogLiks_train.append(pyddm.get_model_loss(model=model,sample=train_sample)/(train_sample.choice_upper.size+train_sample.choice_lower.size))
+        
         LogLiks_test.append(pyddm.get_model_loss(model=model,sample=test_sample)/(test_sample.choice_upper.size+test_sample.choice_lower.size))
         params.append(get_model_parameters(model))
     
@@ -124,7 +129,7 @@ def load_evaluation(path = None,recompute = False):
     function to run the evaluation of the model on the test set and the training set
     """
     if path is None:
-        path = Path(r'C:\Users\Flora\Documents\Github\av-ddm\data\rt_to_laser')
+        path = Path(r'C:\Users\Flora\Documents\Github\av-ddm\data\rt_to_stim')
 
     eval_path = path / 'model_evaluation.csv'
     if eval_path.exists() and not recompute:
@@ -178,10 +183,10 @@ def get_gain_loss_models(df):
                 param = 'ctrl'
                 row = {'stem': stem, 'param': param}
                 if model.startswith('ctrl'):
-                    row.update({'type': 'ctrl'})
+                    row.update({'type': 'gain'})
                     row.update(stem_df[stem_df['model_name'] == model][LogLik_cols].iloc[0].to_dict())
                 elif model.startswith('full'):
-                    row.update({'type': 'full'})
+                    row.update({'type': 'loss'})
                     row.update(stem_df[stem_df['model_name'] == model][LogLik_cols].iloc[0].to_dict())
                 rows.append(row)
 

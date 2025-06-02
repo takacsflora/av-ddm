@@ -57,6 +57,25 @@ def preproc_ev(ev):
     ev['rt_laserThresh'] = ev.timeline_choiceThreshPostLaserOn-ev.block_laserStartTimes # block laserStartTimes   
     ev['laserstim_diff'] = ev.block_laserStartTimes-ev.stim_on 
     ev['stimulated_hemisphere'] = np.sign(ev.laser_power_signed)
+
+    
+    visContrast = np.abs(ev["visDiff"])
+    visSide = np.sign(ev["visDiff"])
+    audSide = np.sign(ev["audDiff"])
+    isOpto = ev['is_laserTrial']
+    
+    #  variables that I actually use in the fitting..
+    a_R = (audSide>0)
+    a_L = (audSide<0)
+    v_R = (visSide>0) * visContrast
+    v_L = (visSide<0) * visContrast
+
+    ev['isOpto'] = isOpto
+    ev['a_R'] = a_R
+    ev['a_L'] = a_L
+    ev['v_R'] = v_R
+    ev['v_L'] = v_L
+
     return ev
 
 def filter_ev(ev,rt_rel_to = 'stim',ctrl_only = False):
@@ -128,6 +147,7 @@ def get_summary_dataset(set_name='uni_SC_nogo',recompute=True,subsample=True,rt_
     if not file_path.exists() or recompute:
         savepath.mkdir(parents=True,exist_ok=True)
         df = read_csvs(set_name)
+        df = preproc_ev(df)
         df = filter_ev(df,rt_rel_to = rt_rel_to)
 
         if subsample: 
@@ -236,16 +256,16 @@ def write_samples():
     train, test and all.
     """
 
-    data_path = Path(r'D:\LogRegression\opto\per_subject')
+    data_path = Path(r'D:\LogRegression\opto\uni_MOs_nogo')
     animal_paths = list(data_path.glob('*.csv'))
     rt_rel_to = 'stim' # 'stim' or 'laser'
 
     savepath = Path(rf'C:\Users\Flora\Documents\Github\av-ddm\data\rt_to_{rt_rel_to}')
 
-    ctrl_only = True
+    ctrl_only = False
 
     if ctrl_only:
-        savepath = savepath / 'ctrl'
+        savepath = savepath #/ 'ctrl'
     # output data paths
     savetrain = savepath / 'train'
     savetest = savepath / 'test'

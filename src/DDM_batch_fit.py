@@ -5,8 +5,8 @@ import os
 import psutil
 import sys
 
-from fitting import get_parameters
-from model_components import get_freeP_ctrl,get_freeP_opto,get_freeP_set
+
+import AVmodel as AV
 from my_io import save_pickle,read_pickle
 from pathlib import Path
 
@@ -23,7 +23,6 @@ def trainDDMs(rank=1):
     # input data paths
 
     fit_resampled_data = False 
-    fit_type = 'opto'
 
     mycwd = Path(os.getcwd())
     
@@ -31,9 +30,9 @@ def trainDDMs(rank=1):
          data_path = mycwd / 'resample_data/train'
 
     else:
-        data_path = mycwd / 'summary_data'
+        data_path = mycwd / 'train'
     
-    #data_path = Path(r'C:\Users\Flora\Documents\Github\av-ddm\data\rt_to_stim\summary_data')
+    data_path = Path(r'C:\Users\Flora\Documents\Github\av-ddm\data\rt_to_stim\train')
 
     animal_paths = list(data_path.glob('*.pickle')) # 11 files 
 
@@ -48,11 +47,12 @@ def trainDDMs(rank=1):
     savepath.mkdir(parents=True,exist_ok=True)
 
 
-    freeP_sets = get_freeP_set(fit_type=fit_type) # the differnt model types we are testing
+    models = AV.get_param_sets()
+    model_names = list(models)
 
-    print(len(animal_paths)*len(freeP_sets), 'models to fit...')
+    print(len(animal_paths)*len(model_names), 'models to fit...')
 
-    for i,(animal_path,set) in enumerate(itertools.product(animal_paths,freeP_sets)):
+    for i,(animal_path,set) in enumerate(itertools.product(animal_paths,model_names)):
         s = animal_path.stem
         currmodel_path  = savepath / ('%s_Model_%s.pickle' % (s,set)) 
         if (i==(rank-1)) and not currmodel_path.is_file(): 
@@ -61,22 +61,28 @@ def trainDDMs(rank=1):
 
             t0 = time.time()
             
-            if fit_type == 'ctrl': 
-                freePs = get_freeP_ctrl(set)
-            elif fit_type == 'opto':
-                freePs = get_freeP_opto(set)
+            params = models[set]
+            m = AV.assemble_model(params)
+
+
+
+            m.fit(Sample_train, lossfunction=pyddm.LossLikelihood, verbose=False)         
             
-            fit_params = get_parameters(fit_type=fit_type,freePs=freePs) 
+            # now we save the paramters only
+            
+            results = {}
+            
+            results['params'] = m.parameters()
+            results['fitted'] = m.get_model_parameters()
+            results['fitted_names'] = m.get_model_parameter_names()
 
 
-            m = pyddm.Model(**fit_params)
-            pyddm.fit_adjust_model(model=m, sample=Sample_train, lossfunction=pyddm.LossLikelihood, verbose=False)         
-            save_pickle(m,savepath / currmodel_path)
+            save_pickle(results,savepath / currmodel_path)
             print('%s fit %s...' %(set,s))
             print('time to fit:%.2d s' % (time.time()-t0))    
             print('RAM Used (GB):', (psutil.virtual_memory()[3]/1000000000))
             print('memory used (GB):', (psutil.Process().memory_info().rss / (1024 * 1024 *1000)))
             
 if __name__ == "__main__":  
-   trainDDMs(rank=sys.argv[1]) 
-   #trainDDMs(rank=1) 
+   #trainDDMs(rank=sys.argv[1]) 
+   trainDDMs(rank=1) 

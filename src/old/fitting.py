@@ -1,5 +1,5 @@
 import pyddm
-import model_components as model_components
+import src.old.model_components as model_components
 import numpy as np
 
 def get_parameters(fit_type = 'opto',freePs=None): 

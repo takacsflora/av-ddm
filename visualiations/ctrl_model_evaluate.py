@@ -8,6 +8,7 @@ from src.evaluate import load_evaluation,get_gain_loss_models
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+import numpy as np
 
 path = Path(r'C:\Users\Flora\Documents\Github\av-ddm\data\rt_to_stim\ctrl')
 df = load_evaluation(path,recompute = False)
@@ -32,11 +33,21 @@ sns.lineplot(data=results_df, x='param', y=which_metric, hue='type', style='stem
 sns.lineplot(data=results_df, x='param', y=which_metric, hue='type',
               markers=True, dashes=False,legend=False,ax=ax)
 
-ax.set_ylim([-.2,1.2])
+ax.set_ylim([-.5,1.5])
 ax.axhline(1,linestyle='--',color='grey')
+ax.axhline(0,linestyle='--',color='grey')
+
 for label in ax.get_xticklabels():
     label.set_rotation(90)
 
+# Turn off all spines except the left one
+for spine in ['top', 'right', 'bottom']:
+      ax.spines[spine].set_visible(False)
+
+# Set ylabel
+ax.set_ylabel('-LogLikelihood (norm.)')
+ax.set_yticks([0,1])
+ax.set_xlabel('')
 
 # %%
 # parameters of the full model
@@ -46,14 +57,23 @@ params = results_df.param.unique()
 params = [param for param in params if param not in ['ctrl']]
 
 n_params = len(params)
-fig,ax = plt.subplots(1,n_params,figsize=(n_params*2,3))
+fig,ax = plt.subplots(1,n_params,figsize=(n_params*1,2))
 fig.subplots_adjust(wspace=1)
 
 for i,param in enumerate(params): 
-    ax[i].plot(df_full[param],'o')
+    y = df_full[param].values
+    x= np.ones_like(y)
+    ax[i].plot(x,y,'o',color='cyan',markeredgecolor='black',alpha=.5,markersize=6)
     ax[i].axhline(0,linestyle='--',color='grey')
     ax[i].set_title(param)
 
+
+# Turn off all labels except for the y-axis and all spines except the left one
+for axes in ax:
+      axes.set_xticks([])
+      axes.set_xlabel('')
+      for spine in ['top', 'right', 'bottom']:
+            axes.spines[spine].set_visible(False)
 # %%
 
 # visualise the model
@@ -65,7 +85,7 @@ from src.read_model import get_model
 sample = path /'summary_data' / 'per_subject_Sample_train.pickle'
 sample = read_pickle(sample)
 
-model_name = 'g_vis_x0'
+model_name = 'ctrl'
 model = get_model(
       path = rf'C:\Users\Flora\Documents\Github\av-ddm\data\rt_to_stim\ctrl\summary_data',
       sample_name='per_subject_Sample_train',
@@ -88,7 +108,7 @@ aud_azimuths = [-60,-60,0,60,60]
 contrast = .5
 vis_contrasts =  [-contrast,contrast,0,-contrast,contrast]
 
-fig,ax = plt.subplots(1,len(aud_azimuths),figsize=(8,3),sharey=True, sharex=True)
+fig,ax = plt.subplots(1,len(aud_azimuths),figsize=(4,1.5),sharey=True, sharex=True)
 data_dt = .025
 scaling_factor = 3
 for i,(a,v) in enumerate(zip(aud_azimuths,vis_contrasts)):
@@ -116,6 +136,6 @@ for axes in ax:
 
 ax[0].set_ylabel('pdf')
 ax[0].set_xlabel('RT (s)')
-fig.suptitle(model_name,fontsize=10,y=1.1)
+#fig.suptitle(model_name,fontsize=10,y=1.1)
 
 # %%
