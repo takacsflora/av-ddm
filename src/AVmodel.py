@@ -1,6 +1,10 @@
 
 import pyddm
 
+def simple_drift_(S,isOpto,s,b,d_b):
+
+    return s*S + b + d_b * isOpto
+
 def drift_(a_R, v_R, a_L, v_L, isOpto, aR, vR, aL, vL, gamma, b, d_aR, d_vR, d_aL, d_vL, d_b):
     
     v_L = v_L**gamma
@@ -73,7 +77,7 @@ def my_hyperparams():
         'conditions':['v_L','v_R','a_L','a_R','isOpto'],
         'dt':.001,
         'dx': .001,
-        'T_dur' : 1.5, 
+        'T_dur' : 0.6, 
         'choice_names':('Right','Left')
         }
     
@@ -138,11 +142,16 @@ def get_param_sets():
 
     return models_to_fit
 
-def assemble_model(params):
+def assemble_model(params,drift_type = 'av'):
     
     hyperparams = my_hyperparams()
 
-    m = pyddm.gddm(drift=drift_,
+    if drift_type == 'av':
+        driftfun = drift_
+    elif drift_type == 'simulated':
+        driftfun = simple_drift_
+    
+    m = pyddm.gddm(drift=driftfun,
                 noise="noise",
                 starting_position=x0_,
                 bound=Bound_,

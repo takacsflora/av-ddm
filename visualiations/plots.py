@@ -43,15 +43,27 @@ def plot_diagnostics(model=None,sample = None, conditions=None,data_dt =.025,met
         data_hist_bot = np.histogram(s.choice_lower, bins=int(T_dur/data_dt)+1, range=(0-data_dt/2, T_dur+data_dt/2))[0]
         total_samples = len(s)
         
-        data_top_norm = np.asarray(data_hist_top)/total_samples/data_dt+myloc
-        data_bot_norm = -np.asarray(data_hist_bot)/total_samples/data_dt+myloc
+        data_top_norm = np.asarray(data_hist_top)/total_samples/data_dt
+        data_bot_norm = -np.asarray(data_hist_bot)/total_samples/data_dt
         datfunc = getattr(ax, data_plot_func)
         if time_on_x:
             datfunc(t_domain_data,data_top_norm, label="Data", **dkwargs)
             datfunc(t_domain_data+myloc,data_bot_norm, label="Data", **dkwargs)
+            # 
+            ## adding undecided trials
+            # ax.bar(T_dur+data_dt,s.prob_undecided,**dkwargs)
+            # ax.bar(T_dur+data_dt+myloc,-s.prob_undecided,**dkwargs)
         else:
-            datfunc(data_top_norm,t_domain_data, label="Data",**dkwargs)
-            datfunc(data_bot_norm,t_domain_data, label="Data", **dkwargs)
+            datfunc(data_top_norm+myloc,t_domain_data, label="Data",**dkwargs)
+            datfunc(data_bot_norm+myloc,t_domain_data, label="Data", **dkwargs)
+            
+            # adding undecided trials
+            #ax.arrow(0+myloc,T_dur+data_dt,s.prob_undecided()/data_dt,0,width = data_dt*2,**dkwargs)
+            #ax.arrow(0+myloc,T_dur+data_dt,-s.prob_undecided()/data_dt,0,width = data_dt*2,**dkwargs)
+
+            #ax.plot(-s.prob_undecided()/data_dt+myloc,T_dur+data_dt)
+
+        
         toplabel,bottomlabel = sample.choice_names
     if model:
         s = solve_partial_conditions(model, sample, conditions=conditions, method=method)
@@ -63,7 +75,8 @@ def plot_diagnostics(model=None,sample = None, conditions=None,data_dt =.025,met
         else:
             ax.plot(s.pdf("_top")+myloc,model.t_domain(),**mkwargs)
             ax.plot(-s.pdf("_bottom")+myloc,model.t_domain(),**mkwargs)
-
+            #ax.plot(myloc+(s.prob_undecided()/model.dt),model.t_domain()[-1],'o',markersize=10,**mkwargs)
+        
         toplabel,bottomlabel = model.choice_names
 
 def get_rt_quartiles(m,a,v,o,which = 'correct'):
@@ -241,13 +254,13 @@ def av_diagnostics(sample,model=None):
                                 conditions=curr_cond,data_dt =.025,method=None,myloc=i*scaling_factor,ax = ax[isLaser,ia],
                                 dkwargs={'color':colors[ia],'alpha':.5},time_on_x=False)
 
-    ax[0,0].set_ylim([.01,1.5])
+    #ax[0,0].set_ylim([.01,1.5])
     ax[0,0].set_title('ctrl trials',loc='left')
     ax[1,0].set_title('opto trials',loc='left')
     ax[0,0].set_xticks(np.arange(actual_vis_contrasts.size)*scaling_factor)
     ax[0,0].set_xticklabels(actual_vis_contrasts)
     ax[1,0].set_xlabel('contrast')
     ax[0,0].set_ylabel('reaction time (s)')
-    ax[0,0].set_ylim([.1,.5])
+    #ax[0,0].set_ylim([.1,.5])
 
     return fig

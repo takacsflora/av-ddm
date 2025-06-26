@@ -1,4 +1,4 @@
-
+#%%
 from utils.add_src_to_sys import *
 
 
@@ -17,7 +17,7 @@ sample = pyddm.Sample.from_pandas_dataframe(df,
                                             choice_names =  ("Right", "Left"))
 
 #
-
+#%%
 # assemble the model
 import src.AVmodel as AV
 
@@ -27,5 +27,5 @@ m = AV.assemble_model(params)
 
 
 import pyddm.plot
-
+#%%
 pyddm.plot.model_gui(model = m ,sample = sample)

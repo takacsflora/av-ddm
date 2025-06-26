@@ -78,7 +78,7 @@ def preproc_ev(ev):
 
     return ev
 
-def filter_ev(ev,rt_rel_to = 'stim',ctrl_only = False):
+def filter_ev(ev,rt_rel_to = 'stim',keep_undecided = False, ctrl_only = False,max_rt = 1.5):
     """
     function to filter the event structure coming out of the PinkRig pipeline
      - throws away nogo trials 
@@ -95,9 +95,13 @@ def filter_ev(ev,rt_rel_to = 'stim',ctrl_only = False):
     if rt_rel_to == 'stim':
         ev['RT'] = ev['rt_thresh']
     elif rt_rel_to == 'laser':
-        ev['RT'] = ev['rt_laserThresh']    
-    ev = ev[((ev.choice==0) | (ev.choice==1)) & 
-            (~ev.RT.isna())].copy()
+        ev['RT'] = ev['rt_laserThresh']
+
+    if keep_undecided:
+        ev = ev[~((ev.choice!=-1) & (ev.RT.isna()|(ev.RT>max_rt)))].copy()
+    else: 
+        ev = ev[((ev.choice==0) | (ev.choice==1)) & 
+                (~ev.RT.isna())].copy()  
 
     if ctrl_only:
         ev = ev[ev['is_laserTrial'] == 0].copy()
@@ -265,7 +269,8 @@ def write_samples():
     ctrl_only = False
 
     if ctrl_only:
-        savepath = savepath #/ 'ctrl'
+        savepath = savepath / 'ctrl'
+
     # output data paths
     savetrain = savepath / 'train'
     savetest = savepath / 'test'

@@ -12,9 +12,11 @@ setup(
         'pandas==1.4', 
         'matplotlib',
         'ipykernel',
-        'pyddm',
         'scikit-learn',
-        'seaborn'
+        'seaborn',
+        "pyddm @ git+https://github.com/mwshinn/PyDDM.git@master"
+
+
 
     ],
     classifiers=[                          # Optional metadata for PyPI
