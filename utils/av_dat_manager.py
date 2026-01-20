@@ -47,7 +47,7 @@ def preproc_ev(ev):
 
     """
     ev['visDiff'] = ev.stim_visDiff
-    ev['audDiff'] = ev.stim_audDiff
+    ev['audDiff'] = np.round(ev.stim_audDiff/max(ev.stim_audDiff),2)
     ev['visDiff'] = np.round(ev.visDiff/max(ev.visDiff),2) # aud is already normalised byt we also normalise vis
     ev["choice"] = (ev["response_direction"]-1).astype(int)
     # here we can play around a bit... 
@@ -133,7 +133,31 @@ def read_csvs(set_name = 'uni_SC_nogo', subset =''):
 
     return pd.concat(data, ignore_index=True)
 
-def get_summary_dataset(set_name='uni_SC_nogo',recompute=True,subsample=True,rt_rel_to = 'stim'):
+def get_undecided_sample(df):
+
+    """
+    function to write pyddm samples for undecided trials in the av dataset
+    """
+    left_choices =df[df.choice == 0].copy()
+    right_choices = df[df.choice == 1].copy()
+    undecided_choices = df[df.choice == -1].copy()
+
+    # Switch left and right choices for sample creation
+    sample = pyddm.Sample(
+        right_choices.RT.values, left_choices.RT.values, len(undecided_choices),
+        a_L=(right_choices.a_L.values, left_choices.a_L.values, undecided_choices.a_L.values),
+        v_L=(right_choices.v_L.values, left_choices.v_L.values, undecided_choices.v_L.values),
+        a_R=(right_choices.a_R.values, left_choices.a_R.values, undecided_choices.a_R.values),
+        v_R=(right_choices.v_R.values, left_choices.v_R.values, undecided_choices.v_R.values),
+        isOpto=(right_choices.isOpto.values, left_choices.isOpto.values, undecided_choices.isOpto.values),
+        visDiff=(right_choices.visDiff.values, left_choices.visDiff.values, undecided_choices.visDiff.values),
+        audDiff=(right_choices.audDiff.values, left_choices.audDiff.values, undecided_choices.audDiff.values),
+        is_laserTrial=(right_choices.is_laserTrial.values, left_choices.is_laserTrial.values, undecided_choices.is_laserTrial.values),
+        choice_names=("Right", "Left")
+    )
+    return sample
+
+def get_summary_dataset(set_name='uni_SC_nogo',recompute=True,subsample=True,return_df = False ,**filterkwargs):
     """function to save and extract the summary data from a given dataset
 
     Args:
@@ -144,7 +168,7 @@ def get_summary_dataset(set_name='uni_SC_nogo',recompute=True,subsample=True,rt_
     Returns:
         pyddm.sample: to be used for fitting the model
     """
-    savepath = Path(rf'C:\Users\Flora\Documents\Github\av-ddm\data\rt_to_{rt_rel_to}\summary_data')
+    savepath = Path(rf'C:\Users\Flora\Documents\Github\av-ddm\data\with_nogos\summary_data') # this should be more modular... 
     file_name = f'{set_name}.pickle'
     file_path = savepath / file_name
 
@@ -152,16 +176,19 @@ def get_summary_dataset(set_name='uni_SC_nogo',recompute=True,subsample=True,rt_
         savepath.mkdir(parents=True,exist_ok=True)
         df = read_csvs(set_name)
         df = preproc_ev(df)
-        df = filter_ev(df,rt_rel_to = rt_rel_to)
+        df = filter_ev(df,**filterkwargs)
 
         if subsample: 
             min_trials_per_file = df['file'].value_counts().min()
             df = df.groupby('file', group_keys=False).apply(lambda x: x.sample(n=min_trials_per_file, random_state=42))
 
-        sample = pyddm.Sample.from_pandas_dataframe(df, 
-                                                    rt_column_name="RT", 
-                                                    choice_column_name="choice", 
-                                                    choice_names =  ("Right", "Left"))
+        if filterkwargs['keep_undecided']:
+            sample = get_undecided_sample(df)
+        else:
+            sample = pyddm.Sample.from_pandas_dataframe(df, 
+                                                        rt_column_name="RT", 
+                                                        choice_column_name="choice", 
+                                                        choice_names =  ("Right", "Left"))
 
 
 
@@ -169,7 +196,10 @@ def get_summary_dataset(set_name='uni_SC_nogo',recompute=True,subsample=True,rt_
     else:
         sample = read_pickle(file_path)
 
-    return sample 
+    if return_df:
+        return df,sample
+    else:
+        return sample 
 
 def cv_split(ev,**splitkwargs):
     """
@@ -260,16 +290,24 @@ def write_samples():
     train, test and all.
     """
 
-    data_path = Path(r'D:\LogRegression\opto\uni_MOs_nogo')
-    animal_paths = list(data_path.glob('*.csv'))
     rt_rel_to = 'stim' # 'stim' or 'laser'
 
-    savepath = Path(rf'C:\Users\Flora\Documents\Github\av-ddm\data\rt_to_{rt_rel_to}')
+    data_path = Path(r'D:\LogRegression\opto\uni_SC_nogo')
+    animal_paths = list(data_path.glob('*.csv'))
+    savepath = Path(rf'C:\Users\Flora\Documents\Github\av-ddm\data\rt_to_{rt_rel_to}\SC_uni')
 
     ctrl_only = False
+    keep_undecided = True
 
+    if keep_undecided:
+        savepath = savepath / 'with_undecided'
+    else:
+        savepath = savepath / 'no_undecided'
+    
     if ctrl_only:
         savepath = savepath / 'ctrl'
+    else:
+        savepath = savepath / 'opto'
 
     # output data paths
     savetrain = savepath / 'train'
@@ -280,13 +318,16 @@ def write_samples():
     savetest.mkdir(parents=True,exist_ok=True)
     saveall.mkdir(parents=True,exist_ok=True)
 
+    summary = []
     for animal_path in animal_paths:
 
         ev = pd.read_csv(animal_path) 
         ev = preproc_ev(ev)
 
         s = animal_path.stem
-        Block = filter_ev(ev,rt_rel_to = rt_rel_to,ctrl_only=ctrl_only)
+        Block = filter_ev(ev,rt_rel_to = rt_rel_to,ctrl_only=ctrl_only,keep_undecided=keep_undecided)
+
+        summary.append(Block)
 
         if Block.shape[0] == 0:
             print('no data for %s' % s)
@@ -295,14 +336,34 @@ def write_samples():
             print('processing %s' % s)
 
             Block["choice"] = Block["choice"].to_numpy()
-            Sample_ = pyddm.Sample.from_pandas_dataframe(Block, rt_column_name="RT", choice_column_name="choice", choice_names =  ("Right", "Left"))
-            save_pickle(Sample_,saveall / ('%s_Sample_all.pickle' % s))
 
-            Block = cv_split(Block,n_splits=2,test_size=.2,random_state=0)
-            Sample_train = pyddm.Sample.from_pandas_dataframe(Block[Block.trainSet], rt_column_name="RT", choice_column_name="choice", choice_names =  ("Right", "Left"))
+            if keep_undecided:
+                Sample_ = get_undecided_sample(Block)
+                Block = cv_split(Block,n_splits=2,test_size=.2,random_state=0)
+                Sample_train = get_undecided_sample(Block[Block.trainSet])
+                Sample_test = get_undecided_sample(Block[~Block.trainSet])
+            else:
+                Sample_ = pyddm.Sample.from_pandas_dataframe(Block, rt_column_name="RT", choice_column_name="choice", choice_names =  ("Right", "Left"))
+                Block = cv_split(Block,n_splits=2,test_size=.2,random_state=0)
+                Sample_train = pyddm.Sample.from_pandas_dataframe(Block[Block.trainSet], rt_column_name="RT", choice_column_name="choice", choice_names =  ("Right", "Left"))
+                Sample_test = pyddm.Sample.from_pandas_dataframe(Block[~Block.trainSet], rt_column_name="RT", choice_column_name="choice", choice_names =  ("Right", "Left"))
+
+            
+            # save the samples 
+            save_pickle(Sample_,saveall / ('%s_Sample_all.pickle' % s))                     
             save_pickle(Sample_train,savetrain / ('%s_Sample_train.pickle' % s))
-            Sample_test = pyddm.Sample.from_pandas_dataframe(Block[~Block.trainSet], rt_column_name="RT", choice_column_name="choice", choice_names =  ("Right", "Left"))
             save_pickle(Sample_test,savetest / ('%s_Sample_test.pickle' % s))
+
+    summary = pd.concat(summary,ignore_index=True)
+    # subsample to have equal number of trials per subject
+    min_trials_per_subject = summary['subjectID'].value_counts().min()
+    summary = summary.groupby('subjectID', group_keys=False).apply(lambda x: x.sample(n=min_trials_per_subject, random_state=42))
+
+    if keep_undecided:
+        summary_sample = get_undecided_sample(summary)
+    else:
+        summary_sample = pyddm.Sample.from_pandas_dataframe(summary, rt_column_name="RT", choice_column_name="choice", choice_names =  ("Right", "Left"))
+    save_pickle(summary_sample,savetrain / ('summary_sample.pickle'))
 
 
 if __name__ == "__main__":  

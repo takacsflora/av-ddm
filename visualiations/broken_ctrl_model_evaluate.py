@@ -94,7 +94,7 @@ model = get_model(
 
 
 
-import plots
+import visualiations.model_performace.plots as plots
 import matplotlib.pyplot as plt
 import numpy as np
 

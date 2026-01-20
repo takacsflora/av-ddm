@@ -1,6 +1,7 @@
 
 #%%
-from AVmodel import get_param_sets,assemble_model
+import pyddm
+from AVmodel import get_model,get_delta_param_sets
 from my_io import read_pickle
 from pathlib import Path
 
@@ -21,7 +22,7 @@ def construct_model_path(sample_name = 'uni_SC_nogo', model_name = 'g_d_b', path
 
 
 
-def get_model(file_path = None,**kwargs): 
+def load_saved_model(file_path = None, model_class = 'av_lazy',**kwargs): 
     """
     function to load a model from a given path. 
 
@@ -37,13 +38,16 @@ def get_model(file_path = None,**kwargs):
     if file_path is None:
         file_path = construct_model_path(**kwargs)
 
-    model_name = file_path.stem.split('Model_')[-1]
+    paramset_name = file_path.stem.split('params_')[-1]
     # 
 
     modelparams =  read_pickle(file_path)
 
-    models = get_param_sets()
-    model = assemble_model(models[model_name])
+    modelfun,full_params,hyperparams = get_model(which=model_class)  # get the model functions and parameters
+
+    paramsets = get_delta_param_sets(full_params,which=model_class)  # get the reduced parameter sets
+
+    model = pyddm.gddm(parameters=paramsets[paramset_name],**modelfun,**hyperparams)  # assemble the model with the parameters and functions
     model.set_model_parameters(modelparams['fitted'])
     return model
 

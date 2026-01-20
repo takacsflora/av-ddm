@@ -31,12 +31,14 @@ def trainDDMs(rank=1):
 
     else:
         data_path = mycwd / 'train'
-    
-    data_path = Path(r'C:\Users\Flora\Documents\Github\av-ddm\data\rt_to_stim\train')
+
+
+    ctrl_fit = False
+    model_type = 'av_opto_unilateral'
+
+    #data_path = Path(r'C:\Users\Flora\Documents\Github\av-ddm\data\rt_to_stim\SC_uni\with_undecided\opto\train')
 
     animal_paths = list(data_path.glob('*.pickle')) # 11 files 
-
-
 
     if fit_resampled_data:
         drift_class = 'resampled_fits'
@@ -46,25 +48,30 @@ def trainDDMs(rank=1):
     savepath = mycwd / drift_class
     savepath.mkdir(parents=True,exist_ok=True)
 
+    if ctrl_fit:
+        modelfunctions, full_params,hyperparams = AV.get_model(which=model_type)
+        reduced_models = AV.get_delta_param_sets(full_params,which='ctrl_only')
+    
+    else:
+        modelfunctions, full_params,hyperparams = AV.get_model(which=model_type)
+        reduced_models = AV.get_delta_param_sets(full_params,which=model_type)
 
-    models = AV.get_param_sets()
-    model_names = list(models)
+    model_names = list(reduced_models)
 
     print(len(animal_paths)*len(model_names), 'models to fit...')
 
     for i,(animal_path,set) in enumerate(itertools.product(animal_paths,model_names)):
         s = animal_path.stem
-        currmodel_path  = savepath / ('%s_Model_%s.pickle' % (s,set)) 
+        currmodel_path  = savepath / ('%s_model_%s_params_%s.pickle' % (s,model_type,set)) 
         if (i==(rank-1)) and not currmodel_path.is_file(): 
             # preproc
             Sample_train = read_pickle(animal_path) 
 
             t0 = time.time()
             
-            params = models[set]
-            m = AV.assemble_model(params)
+            params = reduced_models[set]
 
-
+            m = pyddm.gddm(parameters=params,**modelfunctions,**hyperparams) 
 
             m.fit(Sample_train, lossfunction=pyddm.LossLikelihood, verbose=False)         
             
@@ -84,5 +91,5 @@ def trainDDMs(rank=1):
             print('memory used (GB):', (psutil.Process().memory_info().rss / (1024 * 1024 *1000)))
             
 if __name__ == "__main__":  
-   #trainDDMs(rank=sys.argv[1]) 
-   trainDDMs(rank=1) 
+   trainDDMs(rank=sys.argv[1]) 
+   #trainDDMs(rank=1) 

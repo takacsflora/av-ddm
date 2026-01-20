@@ -5,7 +5,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 plt.rcParams['font.size'] = 18
 
-import plots 
+import visualiations.model_performace.plots as plots 
 from src.my_io import read_pickle
 
 

@@ -7,7 +7,7 @@ from utils.add_src_to_sys import *
 import pyddm 
 from utils.av_dat_manager import get_summary_dataset
 from src.read_model import get_model
-import plots
+import visualiations.model_performace.plots as plots
 
 
 dataset  = 'uni_SC_nogo'

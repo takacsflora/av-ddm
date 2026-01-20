@@ -8,7 +8,7 @@
 #$ -l mem=8G
 
 # 11 dataset,15 models/set
-#$ -t 1-925
+#$ -t 1-325
 
 module purge
 module load gcc-libs/4.9.2
@@ -25,7 +25,7 @@ module load binutils
 
 
 pip install --upgrade pip
-pip install pyddm
+pip install git+https://github.com/mwshinn/PyDDM.git@master 
 pip install psutil 
 
 python DDM_batch_fit.py $SGE_TASK_ID
